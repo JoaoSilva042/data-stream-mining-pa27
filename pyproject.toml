@@ -1,0 +1,12 @@
+[project]
+name = "data-stream-mining-pa27"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "jupyter>=1.1.1",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.3",
+    "pandas>=3.0.6",
+    "requests>=2.34.2",
+    "river>=0.26.1",
+]
