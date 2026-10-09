@@ -1,0 +1,33 @@
+{
+  "rows": 43824,
+  "duplicate_rows": 0,
+  "duplicate_timestamps": 0,
+  "missing_by_variable": {
+    "temperature_2m": 0,
+    "relative_humidity_2m": 0,
+    "precipitation": 0,
+    "wind_speed_10m": 0,
+    "dew_point_2m": 0,
+    "apparent_temperature": 0,
+    "vapour_pressure_deficit": 0,
+    "rain": 0,
+    "snowfall": 0,
+    "weather_code": 0,
+    "pressure_msl": 0,
+    "surface_pressure": 0,
+    "cloud_cover": 0,
+    "cloud_cover_low": 0,
+    "cloud_cover_mid": 0,
+    "cloud_cover_high": 0,
+    "wind_direction_10m": 0,
+    "shortwave_radiation": 0,
+    "sunshine_duration": 0,
+    "soil_temperature_0_to_7cm": 0,
+    "soil_temperature_7_to_28cm": 0,
+    "soil_moisture_0_to_7cm": 0,
+    "soil_moisture_7_to_28cm": 0
+  },
+  "chronological_order": true,
+  "start_utc": "2021-01-01T00:00:00+00:00",
+  "end_utc": "2025-12-31T23:00:00+00:00"
+}
