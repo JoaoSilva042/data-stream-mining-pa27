@@ -1,5 +1,5 @@
 {
-  "rows": 43824,
+  "rows": 87672,
   "duplicate_rows": 0,
   "duplicate_timestamps": 0,
   "missing_by_variable": {
@@ -28,6 +28,6 @@
     "soil_moisture_7_to_28cm": 0
   },
   "chronological_order": true,
-  "start_utc": "2021-01-01T00:00:00+00:00",
+  "start_utc": "2016-01-01T00:00:00+00:00",
   "end_utc": "2025-12-31T23:00:00+00:00"
 }

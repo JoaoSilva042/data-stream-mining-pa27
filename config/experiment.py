@@ -8,14 +8,15 @@ BUSINESS_CONTEXT = "Winter Road-Service Operator"
 TARGET_ID = "T3"
 TARGET_NAME = "Cold Stress Event"
 
-HISTORICAL_START = "2021-01-01"
+HISTORICAL_START = "2016-01-01"
 HISTORICAL_END = "2025-12-31"
 
-WARMUP_START = "2021-01-01"
-WARMUP_END = "2021-12-31"
+WARMUP_START = "2016-01-01"
+WARMUP_END = "2017-12-31"
 
-EVALUATION_START = "2022-01-01"
+EVALUATION_START = "2018-01-01"
 EVALUATION_END = "2025-12-31"
+
 
 TARGET_QUANTILE = 0.20
 
@@ -84,3 +85,55 @@ CITIES = {
 }
 
 OPEN_METEO_MODEL = "era5"
+
+# Target configuration
+TARGET_COLUMN = "cold_stress"
+TARGET_SOURCE_COLUMN = "temperature_2m"
+POSITIVE_CLASS = 1
+
+# Required representations
+REPRESENTATIONS = (
+    "A",
+    "B",
+)
+
+# Streaming evaluation
+EVALUATION_LABELS = (0, 1)
+
+# Same recent-performance window used as the
+# classroom default in the Week 4/5 labs.
+EVALUATION_WINDOW = 100
+
+
+# Model settings adapted from the Week 5 and Week 6 labs.
+MODEL_PARAMS = {
+    "gaussian_nb": {},
+
+    "logistic_regression": {
+        "learning_rate": 0.05,
+    },
+
+    "hoeffding_tree": {
+        "grace_period": 30,
+        "delta": 1e-3,
+        "tau": 0.10,
+        "leaf_prediction": "mc",
+    },
+
+    "online_bagging": {
+        "n_models": 5,
+    },
+
+    "adaptive_random_forest": {
+        "n_models": 5,
+        "max_features": "sqrt",
+        "lambda_value": 6,
+        "leaf_prediction": "mc",
+        "grace_period": 30,
+        "delta": 1e-3,
+        "tau": 0.10,
+    },
+}
+
+
+MODEL_NAMES = tuple(MODEL_PARAMS.keys())

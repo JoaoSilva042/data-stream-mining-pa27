@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+import time
 
 from config.experiment import (
     CITIES,
@@ -26,27 +27,58 @@ RAW_DIR.mkdir(parents=True, exist_ok=True)
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def fetch_json(url, params=None, headers=None, timeout=60):
+def fetch_json(
+    url,
+    params=None,
+    headers=None,
+    timeout=60,
+    max_retries=3,
+):
     """Fetch JSON from an HTTP endpoint."""
 
     default_headers = {
-        "User-Agent": "NOVA-IMS-Data-Stream-Mining-PA27/1.0"
+        "User-Agent":
+            "NOVA-IMS-Data-Stream-Mining-PA27/1.0"
     }
 
     if headers:
         default_headers.update(headers)
 
-    response = requests.get(
-        url,
-        params=params,
-        headers=default_headers,
-        timeout=timeout,
-    )
+    for attempt in range(max_retries + 1):
 
-    response.raise_for_status()
+        response = requests.get(
+            url,
+            params=params,
+            headers=default_headers,
+            timeout=timeout,
+        )
 
-    return response.json(), response
+        if response.status_code == 429:
 
+            if attempt == max_retries:
+                response.raise_for_status()
+
+            retry_after = response.headers.get(
+                "Retry-After"
+            )
+
+            wait_seconds = (
+                int(retry_after)
+                if retry_after
+                else 65
+            )
+
+            print(
+                f"Rate limit reached. "
+                f"Waiting {wait_seconds} seconds..."
+            )
+
+            time.sleep(wait_seconds)
+            continue
+
+        response.raise_for_status()
+
+        return response.json(), response
 
 def geocode_city(city_name):
     """Resolve a Portuguese city using Open-Meteo Geocoding API."""
@@ -237,6 +269,7 @@ def build_provenance(
     city_name,
     latitude,
     longitude,
+    weather_data,
     response,
     raw_path,
     processed_path,
@@ -247,14 +280,22 @@ def build_provenance(
         "provider": "Open-Meteo",
         "dataset": "Historical Weather API",
         "city": city_name,
-        "latitude": latitude,
-        "longitude": longitude,
+        "requested_latitude": latitude,
+        "requested_longitude": longitude,
+        "response_latitude": weather_data.get("latitude"),
+        "response_longitude": weather_data.get("longitude"),
+        "response_elevation": weather_data.get("elevation"),
         "api_timezone": API_TIMEZONE,
         "local_timezone": LOCAL_TIMEZONE,
         "historical_start": HISTORICAL_START,
         "historical_end": HISTORICAL_END,
         "model": OPEN_METEO_MODEL,
         "variables_requested": RAW_WEATHER_VARIABLES,
+        "hourly_units":
+            weather_data.get(
+                "hourly_units",
+                {},
+            ),
         "retrieved_at_utc": (
             pd.Timestamp.now(tz="UTC")
             .isoformat()
@@ -393,9 +434,14 @@ def download_city(city_name):
 
 
 # Main function to download the data 
-
 def main():
     porto_df = download_city("Porto")
+
+    print(
+        "\nWaiting 65 seconds to respect "
+        "Open-Meteo rate limits..."
+    )
+    time.sleep(65)
 
     braganca_df = download_city(
         "Braganca"
@@ -412,7 +458,6 @@ def main():
     print(
         f"Braganca: {len(braganca_df):,} rows"
     )
-
 
 if __name__ == "__main__":
     main()
