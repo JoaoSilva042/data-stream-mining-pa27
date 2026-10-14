@@ -380,6 +380,7 @@ def download_city(city_name):
         response=weather_response,
         raw_path=raw_weather_path,
         processed_path=processed_path,
+        weather_data=weather_data,
     )
 
     provenance_path = (

@@ -550,6 +550,7 @@ def build_evaluation_summary(
     return {
         "observations_processed":
             processed,
+            
         "events":
             evaluated,
 
