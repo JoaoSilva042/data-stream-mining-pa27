@@ -5,6 +5,7 @@ from river import (
     naive_bayes,
     optim,
     tree,
+    preprocessing,
 )
 
 from config.experiment import (
@@ -26,7 +27,10 @@ def make_gaussian_nb():
 
 
 def make_logistic_regression():
-    """Create a fresh online Logistic Regression classifier."""
+    """
+    Create a fresh online Logistic Regression
+    classifier with optional online standardization.
+    """
 
     params = MODEL_PARAMS[
         "logistic_regression"
@@ -36,12 +40,24 @@ def make_logistic_regression():
         "learning_rate"
     )
 
-    return linear_model.LogisticRegression(
+    standardize = params.pop(
+        "standardize"
+    )
+
+    model = linear_model.LogisticRegression(
         optimizer=optim.SGD(
             learning_rate
         ),
         **params,
     )
+
+    if standardize:
+        return (
+            preprocessing.StandardScaler()
+            | model
+        )
+
+    return model
 
 
 def make_base_tree():

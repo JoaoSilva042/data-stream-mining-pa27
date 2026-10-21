@@ -1,0 +1,3 @@
+city,number_of_spells,mean_duration_hours,median_duration_hours,max_duration_hours,spells_24h_or_longer
+Porto,787,9.457433290978399,9.0,46,4
+Braganca,1605,16.070404984423675,13.0,526,145

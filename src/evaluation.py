@@ -210,6 +210,11 @@ class StreamingEvaluator:
             window_size
         )
 
+        if self.window_size <= 0:
+            raise ValueError(
+                "window_size must be positive"
+            )
+
         self.recent_pairs = deque()
 
         self.observations_seen = 0
@@ -303,77 +308,85 @@ class StreamingEvaluator:
         }
 
 
-def row_to_xy(
-    row,
-    feature_columns,
-    target_column,
-):
-    """
-    Convert one DataFrame row into
-    River's x/y format.
-    """
 
-    x = {
-        feature: getattr(
-            row,
-            feature,
-        )
-        for feature
-        in feature_columns
-    }
-
-    y = int(
-        getattr(
-            row,
-            target_column,
-        )
-    )
-
-    return x, y
 
 
 def warm_up_online(
     model,
     warmup,
-    feature_columns,
+    feature_builder,
     target_column,
 ):
     """
-    Sequentially train an online model
-    during the shared warm-up period.
+    Sequentially initialize both the model
+    and the streaming feature state.
 
-    No evaluation metrics are collected.
+    During warm-up:
+
+        BUILD X_t
+        → OBSERVE y_t
+        → LEARN
+        → UPDATE FEATURE STATE
+
+    No predictions or evaluation metrics
+    are collected.
     """
 
-    columns = [
-        *feature_columns,
-        target_column,
-    ]
-
-    for row in (
-        warmup[columns]
-        .itertuples(
-            index=False
-        )
+    for row in warmup.itertuples(
+        index=False
     ):
-        x, y = row_to_xy(
-            row,
-            feature_columns,
-            target_column,
+
+
+        # 1. BUILD FEATURES FROM THE PAST
+
+
+        x = (
+            feature_builder
+            .transform_one()
         )
 
-        model.learn_one(
-            x,
+
+        # 2. OBSERVE CURRENT TARGET
+
+
+        y = int(
+            getattr(
+                row,
+                target_column,
+            )
+        )
+
+
+        # 3. LEARN
+
+
+        # During the first 24 hours there
+        # is not enough feature history yet.
+        if x is not None:
+
+            model.learn_one(
+                x,
+                y,
+            )
+
+
+        # 4. UPDATE FEATURE STATE
+
+
+        feature_builder.update_one(
+            row,
             y,
         )
 
-    return model
-
+    return (
+        model,
+        feature_builder,
+    )
 
 def evaluate_model(
     model,
     data,
-    feature_columns,
+    feature_builder,
     target_column,
     *,
     learn=True,
@@ -381,11 +394,15 @@ def evaluate_model(
 ):
     """
     Evaluate an online classifier using
-    the prequential protocol:
+    streaming feature construction and the
+    prequential protocol:
 
-        PREDICT → EVALUATE → LEARN
-
-    Adapted from the Week 4 lab.
+        BUILD FEATURES
+        → PREDICT
+        → OBSERVE TARGET
+        → EVALUATE
+        → LEARN
+        → UPDATE FEATURE STATE
     """
 
     evaluator = StreamingEvaluator(
@@ -398,27 +415,29 @@ def evaluate_model(
     predict_seconds = 0.0
     update_seconds = 0.0
 
-    columns = [
-        "timestamp_utc",
-        *feature_columns,
-        target_column,
-    ]
-
-    for row in (
-        data[columns]
-        .itertuples(
-            index=False
-        )
+    for row in data.itertuples(
+        index=False
     ):
-        x, y = row_to_xy(
-            row,
-            feature_columns,
-            target_column,
+
+        # 1. BUILD X_t FROM PAST ONLY
+
+
+        x = (
+            feature_builder
+            .transform_one()
         )
 
-        
-        # predict
-        
+        # After the warm-up the builder
+        # must already contain enough history.
+        if x is None:
+            raise RuntimeError(
+                "Feature builder is not "
+                "ready during evaluation."
+            )
+
+
+        # 2. PREDICT
+
 
         start = perf_counter()
 
@@ -431,20 +450,34 @@ def evaluate_model(
             - start
         )
 
-        
-        # evaluate
-        
+
+        # 3. OBSERVE CURRENT TARGET
+
+        #
+        # Only now do we reveal y_t.
+
+        y = int(
+            getattr(
+                row,
+                target_column,
+            )
+        )
+
+
+        # 4. EVALUATE
+
 
         snapshot = evaluator.observe(
             y,
             y_pred,
         )
 
-        
-        # learn
-       
+
+        # 5. LEARN
+
 
         if learn:
+
             start = perf_counter()
 
             model.learn_one(
@@ -456,6 +489,18 @@ def evaluate_model(
                 perf_counter()
                 - start
             )
+
+
+        # 6. UPDATE FEATURE STATE
+
+        #
+        # Observation t becomes historical
+        # information for t+1.
+
+        feature_builder.update_one(
+            row,
+            y,
+        )
 
         history.append({
             "timestamp":
