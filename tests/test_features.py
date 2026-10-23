@@ -69,8 +69,34 @@ class TestFeatureDefinitions(unittest.TestCase):
             "sunshine_duration",
             "shortwave_radiation",
             "pressure_msl",
+            "cloud_cover",
         ]
         self.assertEqual(get_base_features("Porto"), expected)
+
+    def test_braganca_base_features_are_the_frozen_selected_set(
+        self
+    ):
+        expected = [
+            "temperature_2m",
+            "relative_humidity_2m",
+            "precipitation",
+            "wind_speed_10m",
+            "dew_point_2m",
+            "soil_temperature_7_to_28cm",
+            "soil_moisture_7_to_28cm",
+            "shortwave_radiation",
+            "sunshine_duration",
+            "pressure_msl",
+            "cloud_cover",
+            "snowfall",
+        ]
+
+        self.assertEqual(
+            get_base_features(
+                "Braganca"
+            ),
+            expected,
+        )
 
     def test_representation_b_is_exactly_a_plus_required_temporal_context(self):
         a = get_feature_columns("Porto", "A")
@@ -239,6 +265,102 @@ class TestStreamFeatureBuilder(unittest.TestCase):
             builder.update_one(row, target)
             temperatures.append(temperature)
             targets.append(target)
+
+    def test_state_snapshot_is_read_only_and_contains_next_features(
+        self
+    ):
+        builder = self._prime(
+            "B",
+            24,
+        )
+
+        before = (
+            builder.observations_seen,
+            list(
+                builder
+                .temperature_history
+            ),
+            list(
+                builder
+                .temperature_window
+                .values
+            ),
+            list(
+                builder
+                .cold_stress_window
+                .values
+            ),
+        )
+
+        state = (
+            builder.state_snapshot()
+        )
+
+        after = (
+            builder.observations_seen,
+            list(
+                builder
+                .temperature_history
+            ),
+            list(
+                builder
+                .temperature_window
+                .values
+            ),
+            list(
+                builder
+                .cold_stress_window
+                .values
+            ),
+        )
+
+        self.assertEqual(
+            before,
+            after,
+        )
+
+        self.assertTrue(
+            state["ready"]
+        )
+
+        self.assertEqual(
+            state[
+                "observations_seen"
+            ],
+            24,
+        )
+
+        self.assertEqual(
+            state[
+                "temperature_window"
+            ],
+            [
+                18.0,
+                19.0,
+                20.0,
+                21.0,
+                22.0,
+                23.0,
+            ],
+        )
+
+        self.assertEqual(
+            state[
+                "next_features"
+            ][
+                "temperature_mean_6h"
+            ],
+            20.5,
+        )
+
+        self.assertEqual(
+            state[
+                "next_features"
+            ][
+                "cold_stress_hours_24h"
+            ],
+            12.0,
+        )
 
     def test_builder_memory_is_bounded(self):
         builder = StreamFeatureBuilder("Porto", "B")

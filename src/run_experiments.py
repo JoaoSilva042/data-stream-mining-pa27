@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -6,6 +7,9 @@ from config.experiment import (
     CITY_A,
     CITY_B,
     MODEL_NAMES,
+    MODEL_PARAMS,
+    RANDOM_SEED,
+    EVALUATION_WINDOW,
     TARGET_COLUMN,
     REPRESENTATIONS,
 )
@@ -51,6 +55,11 @@ SUMMARY_DIR = (
 HISTORY_DIR = (
     RESULTS_DIR
     / "histories"
+)
+
+WARMUP_STATE_DIR = (
+    RESULTS_DIR
+    / "warmup_states"
 )
 
 
@@ -232,6 +241,7 @@ def run_single_experiment(
     (
         model,
         feature_builder,
+        warmup_state,
     ) = warm_up_online(
         model=model,
         warmup=warmup_data,
@@ -239,6 +249,7 @@ def run_single_experiment(
             feature_builder,
         target_column=
             TARGET_COLUMN,
+        return_state=True,
     )
 
     # The feature builder is NOT reset here.
@@ -320,6 +331,21 @@ def run_single_experiment(
         "model":
             model_name,
 
+                "model_params":
+            json.dumps(
+                MODEL_PARAMS.get(
+                    model_name,
+                    {},
+                ),
+                sort_keys=True,
+            ),
+
+        "random_seed":
+            RANDOM_SEED,
+
+        "evaluation_metric_window_hours":
+            EVALUATION_WINDOW,
+
         "cold_threshold":
             threshold,
 
@@ -328,6 +354,28 @@ def run_single_experiment(
 
         "evaluation_rows":
             len(evaluation_data),
+
+        "warmup_model_updates":
+            warmup_state[
+                "model_updates"
+            ],
+
+        "warmup_positive_events":
+            warmup_state[
+                "positive_events"
+            ],
+
+        "warmup_negative_events":
+            warmup_state[
+                "negative_events"
+            ],
+
+        "warmup_feature_builder_ready":
+            warmup_state[
+                "feature_builder"
+            ][
+                "ready"
+            ],
     })
 
     # Useful metadata in the history too.
@@ -353,8 +401,51 @@ def run_single_experiment(
     return (
         summary,
         history,
+        warmup_state,
         model,
     )
+
+
+def save_warmup_state(
+    warmup_state,
+    city_name,
+    representation,
+    model_name,
+):
+    """
+    Save the pre-evaluation streaming-system
+    state as JSON.
+    """
+
+    WARMUP_STATE_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    filename = (
+        f"{city_name.lower()}_"
+        f"{representation.lower()}_"
+        f"{model_name}.json"
+    )
+
+    path = (
+        WARMUP_STATE_DIR
+        / filename
+    )
+
+    with path.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+
+        json.dump(
+            warmup_state,
+            file,
+            indent=2,
+            allow_nan=False,
+        )
+
+    return path
 
 
 def save_experiment_history(
@@ -391,6 +482,177 @@ def save_experiment_history(
 
     return path
 
+def save_experiment_manifest(
+    *,
+    city_streams,
+    threshold,
+):
+    """
+    Save the frozen experimental design
+    used for the official PA27 runs.
+    """
+
+    manifest_path = (
+        SUMMARY_DIR.parent
+        / "experiment_manifest.json"
+    )
+
+    manifest_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    first_city = CITY_A
+
+    warmup = (
+        city_streams[
+            first_city
+        ][
+            "warmup"
+        ]
+    )
+
+    evaluation = (
+        city_streams[
+            first_city
+        ][
+            "evaluation"
+        ]
+    )
+
+    full = (
+        city_streams[
+            first_city
+        ][
+            "full"
+        ]
+    )
+    def period_info(
+        data,
+    ):
+        """
+        Return period metadata when timestamps
+        are available.
+
+        Some unit tests use minimal synthetic
+        DataFrames without timestamp_utc.
+        """
+
+        result = {
+            "rows":
+                int(
+                    len(data)
+                ),
+        }
+
+        if (
+            "timestamp_utc"
+            in data.columns
+            and len(data) > 0
+        ):
+            result[
+                "start"
+            ] = str(
+                data[
+                    "timestamp_utc"
+                ].iloc[0]
+            )
+
+            result[
+                "end"
+            ] = str(
+                data[
+                    "timestamp_utc"
+                ].iloc[-1]
+            )
+
+        return result
+
+    manifest = {
+        "assignment":
+            "PA27",
+
+        "cities": [
+            CITY_A,
+            CITY_B,
+        ],
+
+        "historical_period":
+            period_info(
+                full
+            ),
+
+        "warmup_period":
+            period_info(
+                warmup
+            ),
+
+        "evaluation_period":
+            period_info(
+                evaluation
+            ),
+
+        "cold_threshold":
+            float(threshold),
+
+        "target_column":
+            TARGET_COLUMN,
+
+        "random_seed":
+            RANDOM_SEED,
+
+        "representations":
+            list(
+                REPRESENTATIONS
+            ),
+
+        "models":
+            list(
+                MODEL_NAMES
+            ),
+
+        "evaluation_metric_window_hours":
+            EVALUATION_WINDOW,
+
+        "model_params":
+            MODEL_PARAMS,
+
+        "protocol": {
+            "warmup":
+                (
+                    "BUILD -> OBSERVE TARGET "
+                    "-> LEARN -> UPDATE STATE"
+                ),
+
+            "evaluation":
+                (
+                    "BUILD -> PREDICT -> "
+                    "OBSERVE TARGET -> EVALUATE "
+                    "-> LEARN -> UPDATE STATE"
+                ),
+        },
+
+        "parameter_selection":
+            (
+                "Parameters selected a priori "
+                "before official evaluation; "
+                "no tuning on 2018-2025 data."
+            ),
+    }
+
+    with manifest_path.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+
+        json.dump(
+            manifest,
+            file,
+            indent=2,
+            allow_nan=False,
+        )
+
+    return manifest_path
 
 def run_all_experiments(
     *,
@@ -413,6 +675,21 @@ def run_all_experiments(
         city_streams,
         threshold,
     ) = prepare_experiment_data()
+
+    manifest_path = (
+        save_experiment_manifest(
+            city_streams=
+                city_streams,
+
+            threshold=
+                threshold,
+        )
+    )
+
+    print(
+        "Experiment manifest saved: "
+        f"{manifest_path}"
+    )
 
 
     # 2. MODEL FACTORIES
@@ -485,6 +762,7 @@ def run_all_experiments(
                 (
                     summary,
                     history,
+                    warmup_state,
                     _,
                 ) = run_single_experiment(
                     city_name=
@@ -535,6 +813,29 @@ def run_all_experiments(
                         f"History saved: "
                         f"{path}"
                     )
+
+                    warmup_path = (
+                        save_warmup_state(
+                            warmup_state=
+                                warmup_state,
+
+                            city_name=
+                                city_name,
+
+                            representation=
+                                representation,
+
+                            model_name=
+                                model_name,
+                        )
+                    )
+
+                    print(
+                        "Warm-up state saved: "
+                        f"{warmup_path}"
+                    )
+
+
 
                 print(
                     "Macro-F1: "

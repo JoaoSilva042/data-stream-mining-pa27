@@ -7,6 +7,7 @@ import pandas as pd
 from config.experiment import (
     EVALUATION_LABELS,
     EVALUATION_WINDOW,
+    POSITIVE_CLASS,
 )
 
 
@@ -22,24 +23,15 @@ class OnlineConfusionMatrix:
 
         self.index = {
             label: i
-            for i, label in enumerate(
-                self.labels
-            )
+            for i, label in enumerate(self.labels)
         }
 
         self.matrix = np.zeros(
-            (
-                len(self.labels),
-                len(self.labels),
-            ),
+            (len(self.labels), len(self.labels)),
             dtype=int,
         )
 
-    def update(
-        self,
-        y_true,
-        y_pred,
-    ):
+    def update(self, y_true, y_pred):
         """Add one evaluated prediction."""
 
         self.matrix[
@@ -47,11 +39,7 @@ class OnlineConfusionMatrix:
             self.index[y_pred],
         ] += 1
 
-    def remove(
-        self,
-        y_true,
-        y_pred,
-    ):
+    def remove(self, y_true, y_pred):
         """
         Remove one prediction.
 
@@ -68,19 +56,13 @@ class OnlineConfusionMatrix:
     def total(self):
         """Number of evaluated predictions."""
 
-        return int(
-            self.matrix.sum()
-        )
+        return int(self.matrix.sum())
 
     @property
     def correct(self):
         """Number of correct predictions."""
 
-        return int(
-            np.trace(
-                self.matrix
-            )
-        )
+        return int(np.trace(self.matrix))
 
     def accuracy(self):
         """Compute classification accuracy."""
@@ -88,49 +70,48 @@ class OnlineConfusionMatrix:
         if not self.total:
             return np.nan
 
-        return (
-            self.correct
-            / self.total
-        )
+        return self.correct / self.total
 
-    def precision(self, label):
+    def precision(
+        self,
+        label,
+        undefined=0.0,
+    ):
         """Compute precision for one class."""
 
         i = self.index[label]
 
-        true_positives = (
-            self.matrix[i, i]
-        )
+        true_positives = self.matrix[i, i]
 
         predicted_positive = (
-            self.matrix[:, i]
-            .sum()
+            self.matrix[:, i].sum()
         )
 
         if not predicted_positive:
-            return 0.0
+            return undefined
 
         return float(
             true_positives
             / predicted_positive
         )
 
-    def recall(self, label):
+    def recall(
+        self,
+        label,
+        undefined=0.0,
+    ):
         """Compute recall for one class."""
 
         i = self.index[label]
 
-        true_positives = (
-            self.matrix[i, i]
-        )
+        true_positives = self.matrix[i, i]
 
         actual_positive = (
-            self.matrix[i, :]
-            .sum()
+            self.matrix[i, :].sum()
         )
 
         if not actual_positive:
-            return 0.0
+            return undefined
 
         return float(
             true_positives
@@ -140,27 +121,17 @@ class OnlineConfusionMatrix:
     def f1(self, label):
         """Compute F1-score for one class."""
 
-        precision = self.precision(
-            label
-        )
+        precision = self.precision(label)
+        recall = self.recall(label)
 
-        recall = self.recall(
-            label
-        )
-
-        if not (
-            precision + recall
-        ):
+        if not (precision + recall):
             return 0.0
 
         return (
             2
             * precision
             * recall
-            / (
-                precision
-                + recall
-            )
+            / (precision + recall)
         )
 
     def macro_f1(self):
@@ -175,8 +146,7 @@ class OnlineConfusionMatrix:
         return float(
             np.mean([
                 self.f1(label)
-                for label
-                in self.labels
+                for label in self.labels
             ])
         )
 
@@ -192,19 +162,35 @@ class StreamingEvaluator:
     def __init__(
         self,
         labels,
-        window_size=100,
+        window_size=EVALUATION_WINDOW,
+        positive_class=POSITIVE_CLASS,
     ):
+        self.labels = list(labels)
+
         self.cumulative = (
             OnlineConfusionMatrix(
-                labels
+                self.labels
             )
         )
 
         self.recent = (
             OnlineConfusionMatrix(
-                labels
+                self.labels
             )
         )
+
+        self.positive_class = (
+            positive_class
+        )
+
+        if (
+            self.positive_class
+            not in self.labels
+        ):
+            raise ValueError(
+                "positive_class must be "
+                "one of the evaluator labels"
+            )
 
         self.window_size = int(
             window_size
@@ -270,10 +256,7 @@ class StreamingEvaluator:
         # Add the new prediction to
         # the recent window.
         self.recent_pairs.append(
-            (
-                y_true,
-                y_pred,
-            )
+            (y_true, y_pred)
         )
 
         self.recent.update(
@@ -285,8 +268,11 @@ class StreamingEvaluator:
 
     def snapshot(self):
         """
-        Return current cumulative
-        and recent performance.
+        Return current cumulative and recent
+        predictive performance.
+
+        Positive-class Precision/Recall are NaN
+        while they are mathematically undefined.
         """
 
         return {
@@ -305,10 +291,289 @@ class StreamingEvaluator:
             "window_macro_f1":
                 self.recent
                 .macro_f1(),
+
+            "cumulative_precision_positive":
+                self.cumulative
+                .precision(
+                    self.positive_class,
+                    undefined=np.nan,
+                ),
+
+            "window_precision_positive":
+                self.recent
+                .precision(
+                    self.positive_class,
+                    undefined=np.nan,
+                ),
+
+            "cumulative_recall_positive":
+                self.cumulative
+                .recall(
+                    self.positive_class,
+                    undefined=np.nan,
+                ),
+
+            "window_recall_positive":
+                self.recent
+                .recall(
+                    self.positive_class,
+                    undefined=np.nan,
+                ),
         }
 
 
+def _component_objects(model):
+    """
+    Return top-level components of a River model
+    without modifying the model.
+    """
 
+    components = [model]
+
+    steps = getattr(
+        model,
+        "steps",
+        None,
+    )
+
+    if isinstance(steps, dict):
+        components.extend(
+            steps.values()
+        )
+
+    elif isinstance(
+        steps,
+        (list, tuple),
+    ):
+        for step in steps:
+            if (
+                isinstance(step, tuple)
+                and len(step) == 2
+            ):
+                components.append(
+                    step[1]
+                )
+            else:
+                components.append(step)
+
+    return components
+
+
+def summarize_model_state(model):
+    """
+    Return a compact structural description of
+    the model after warm-up.
+
+    This is for auditability, not for serialising
+    the complete trained model.
+    """
+
+    components = (
+        _component_objects(model)
+    )
+
+    summary = {
+        "model_class":
+            type(model).__name__,
+
+        "component_classes": [
+            type(component).__name__
+            for component in components
+        ],
+    }
+
+    for component in components:
+        weights = getattr(
+            component,
+            "weights",
+            None,
+        )
+
+        if weights is not None:
+            try:
+                summary["n_weights"] = (
+                    len(weights)
+                )
+            except TypeError:
+                pass
+
+        if hasattr(
+            component,
+            "intercept",
+        ):
+            intercept = getattr(
+                component,
+                "intercept",
+            )
+
+            if isinstance(
+                intercept,
+                (
+                    int,
+                    float,
+                    np.integer,
+                    np.floating,
+                ),
+            ):
+                summary["intercept"] = (
+                    float(intercept)
+                )
+
+        counts = getattr(
+            component,
+            "counts",
+            None,
+        )
+
+        if counts is not None:
+            try:
+                summary[
+                    "scaler_features_tracked"
+                ] = len(counts)
+            except TypeError:
+                pass
+
+        class_counts = getattr(
+            component,
+            "class_counts",
+            None,
+        )
+
+        if class_counts is not None:
+            try:
+                summary["class_counts"] = {
+                    str(label): int(count)
+                    for label, count
+                    in class_counts.items()
+                }
+            except (
+                AttributeError,
+                TypeError,
+                ValueError,
+            ):
+                pass
+
+    models = getattr(
+        model,
+        "models",
+        None,
+    )
+
+    if models is not None:
+        try:
+            summary[
+                "ensemble_size"
+            ] = len(models)
+        except TypeError:
+            pass
+
+    for attr in (
+        "n_nodes",
+        "n_leaves",
+        "height",
+        "n_active_leaves",
+        "n_inactive_leaves",
+    ):
+        value = getattr(
+            model,
+            attr,
+            None,
+        )
+
+        if isinstance(
+            value,
+            (
+                int,
+                float,
+                np.integer,
+                np.floating,
+            ),
+        ):
+            summary[attr] = (
+                float(value)
+                if isinstance(
+                    value,
+                    (
+                        float,
+                        np.floating,
+                    ),
+                )
+                else int(value)
+            )
+
+    return summary
+
+
+def build_warmup_state(
+    *,
+    model,
+    feature_builder,
+    warmup,
+    target_column,
+    model_updates,
+):
+    """
+    Capture the streaming-system state
+    immediately before evaluation begins.
+    """
+
+    targets = (
+        warmup[
+            target_column
+        ]
+        .astype(int)
+    )
+
+    timestamps = warmup.get(
+        "timestamp_utc"
+    )
+
+    state = {
+        "warmup_rows":
+            int(len(warmup)),
+
+        "model_updates":
+            int(model_updates),
+
+        "positive_events":
+            int(
+                (
+                    targets
+                    == POSITIVE_CLASS
+                ).sum()
+            ),
+
+        "negative_events":
+            int(
+                (
+                    targets
+                    != POSITIVE_CLASS
+                ).sum()
+            ),
+
+        "model":
+            summarize_model_state(
+                model
+            ),
+
+        "feature_builder":
+            feature_builder
+            .state_snapshot(),
+    }
+
+    if (
+        timestamps is not None
+        and len(timestamps)
+    ):
+        state["warmup_start"] = str(
+            timestamps.iloc[0]
+        )
+
+        state["warmup_end"] = str(
+            timestamps.iloc[-1]
+        )
+
+    return state
 
 
 def warm_up_online(
@@ -316,6 +581,8 @@ def warm_up_online(
     warmup,
     feature_builder,
     target_column,
+    *,
+    return_state=False,
 ):
     """
     Sequentially initialize both the model
@@ -324,31 +591,26 @@ def warm_up_online(
     During warm-up:
 
         BUILD X_t
-        → OBSERVE y_t
-        → LEARN
-        → UPDATE FEATURE STATE
+        -> OBSERVE y_t
+        -> LEARN
+        -> UPDATE FEATURE STATE
 
     No predictions or evaluation metrics
     are collected.
     """
 
+    model_updates = 0
+
     for row in warmup.itertuples(
         index=False
     ):
-
-
         # 1. BUILD FEATURES FROM THE PAST
-
-
         x = (
             feature_builder
             .transform_one()
         )
 
-
         # 2. OBSERVE CURRENT TARGET
-
-
         y = int(
             getattr(
                 row,
@@ -356,32 +618,52 @@ def warm_up_online(
             )
         )
 
-
         # 3. LEARN
-
-
+        #
         # During the first 24 hours there
         # is not enough feature history yet.
         if x is not None:
-
             model.learn_one(
                 x,
                 y,
             )
 
+            model_updates += 1
 
         # 4. UPDATE FEATURE STATE
-
-
         feature_builder.update_one(
             row,
             y,
+        )
+
+    # IMPORTANT:
+    # Build the warm-up snapshot only AFTER
+    # the complete warm-up stream has run.
+    if return_state:
+        warmup_state = (
+            build_warmup_state(
+                model=model,
+                feature_builder=
+                    feature_builder,
+                warmup=warmup,
+                target_column=
+                    target_column,
+                model_updates=
+                    model_updates,
+            )
+        )
+
+        return (
+            model,
+            feature_builder,
+            warmup_state,
         )
 
     return (
         model,
         feature_builder,
     )
+
 
 def evaluate_model(
     model,
@@ -398,11 +680,11 @@ def evaluate_model(
     prequential protocol:
 
         BUILD FEATURES
-        → PREDICT
-        → OBSERVE TARGET
-        → EVALUATE
-        → LEARN
-        → UPDATE FEATURE STATE
+        -> PREDICT
+        -> OBSERVE TARGET
+        -> EVALUATE
+        -> LEARN
+        -> UPDATE FEATURE STATE
     """
 
     evaluator = StreamingEvaluator(
@@ -418,10 +700,7 @@ def evaluate_model(
     for row in data.itertuples(
         index=False
     ):
-
         # 1. BUILD X_t FROM PAST ONLY
-
-
         x = (
             feature_builder
             .transform_one()
@@ -435,27 +714,19 @@ def evaluate_model(
                 "ready during evaluation."
             )
 
-
         # 2. PREDICT
-
-
         start = perf_counter()
 
-        y_pred = model.predict_one(
-            x
-        )
+        y_pred = model.predict_one(x)
 
         predict_seconds += (
             perf_counter()
             - start
         )
 
-
         # 3. OBSERVE CURRENT TARGET
-
         #
         # Only now do we reveal y_t.
-
         y = int(
             getattr(
                 row,
@@ -463,21 +734,14 @@ def evaluate_model(
             )
         )
 
-
         # 4. EVALUATE
-
-
         snapshot = evaluator.observe(
             y,
             y_pred,
         )
 
-
         # 5. LEARN
-
-
         if learn:
-
             start = perf_counter()
 
             model.learn_one(
@@ -490,17 +754,41 @@ def evaluate_model(
                 - start
             )
 
-
         # 6. UPDATE FEATURE STATE
-
         #
         # Observation t becomes historical
         # information for t+1.
-
         feature_builder.update_one(
             row,
             y,
         )
+
+        # Keep only the model-evidence features
+        # needed for temporal diagnostics.
+        tracked_features = {
+            key: value
+            for key, value in x.items()
+            if (
+                key
+                == "temperature_2m_lag1"
+
+                or key.startswith(
+                    "temperature_delta_"
+                )
+
+                or key.startswith(
+                    "temperature_mean_"
+                )
+
+                or key.startswith(
+                    "temperature_std_"
+                )
+
+                or key.startswith(
+                    "cold_stress_hours_"
+                )
+            )
+        }
 
         history.append({
             "timestamp":
@@ -512,6 +800,7 @@ def evaluate_model(
             "y_pred":
                 y_pred,
 
+            **tracked_features,
             **snapshot,
         })
 
@@ -531,7 +820,7 @@ def build_evaluation_summary(
     evaluator,
     predict_seconds,
     update_seconds,
-    positive_class=1,
+    positive_class=POSITIVE_CLASS,
 ):
     """
     Build the final predictive and
@@ -549,17 +838,14 @@ def build_evaluation_summary(
         .observations_seen
     )
 
-
     if evaluated == 0:
         raise ValueError(
-            "No predictions were "
-            "evaluated."
+            "No predictions were evaluated."
         )
 
     if processed == 0:
         raise ValueError(
-            "No observations were "
-            "processed."
+            "No observations were processed."
         )
 
     confusion_matrix = (
@@ -575,7 +861,6 @@ def build_evaluation_summary(
     #
     # True 0     TN     FP
     # True 1     FN     TP
-
     tn = int(
         confusion_matrix[0, 0]
     )
@@ -595,7 +880,7 @@ def build_evaluation_summary(
     return {
         "observations_processed":
             processed,
-            
+
         "events":
             evaluated,
 

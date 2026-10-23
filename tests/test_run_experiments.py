@@ -45,7 +45,12 @@ class TestRunExperiments(unittest.TestCase):
                 "macro_f1": 0.5,
                 "recall_positive": 0.5,
             }
-            return summary, pd.DataFrame(), object()
+            return (
+                summary,
+                pd.DataFrame(),
+                {},
+                object(),
+            )
 
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(runner, "prepare_experiment_data", return_value=(city_streams, 8.7)), \
@@ -97,7 +102,12 @@ class TestRunExperiments(unittest.TestCase):
             created_models.append(model)
             return model
 
-        summary, history, model = runner.run_single_experiment(
+        (
+            summary,
+            history,
+            warmup_state,
+            model,
+        ) = runner.run_single_experiment(
             city_name="Porto",
             representation="B",
             model_name="dummy",
@@ -114,6 +124,33 @@ class TestRunExperiments(unittest.TestCase):
         self.assertEqual(summary["events"], 3)
         self.assertEqual(summary["warmup_rows"], 30)
         self.assertEqual(summary["evaluation_rows"], 3)
+        self.assertEqual(
+            summary[
+                "warmup_model_updates"
+            ],
+            6,
+        )
+
+        self.assertTrue(
+            summary[
+                "warmup_feature_builder_ready"
+            ]
+        )
+
+        self.assertEqual(
+            warmup_state[
+                "warmup_rows"
+            ],
+            30,
+        )
+
+        self.assertTrue(
+            warmup_state[
+                "feature_builder"
+            ][
+                "ready"
+            ]
+        )
         self.assertEqual(history["city"].unique().tolist(), ["Porto"])
         self.assertEqual(history["representation"].unique().tolist(), ["B"])
         self.assertEqual(history["model"].unique().tolist(), ["dummy"])

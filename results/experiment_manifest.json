@@ -1,0 +1,69 @@
+{
+  "assignment": "PA27",
+  "cities": [
+    "Porto",
+    "Braganca"
+  ],
+  "historical_period": {
+    "rows": 87672,
+    "start": "2016-01-01 00:00:00+00:00",
+    "end": "2025-12-31 23:00:00+00:00"
+  },
+  "warmup_period": {
+    "rows": 17544,
+    "start": "2016-01-01 00:00:00+00:00",
+    "end": "2017-12-31 23:00:00+00:00"
+  },
+  "evaluation_period": {
+    "rows": 70128,
+    "start": "2018-01-01 00:00:00+00:00",
+    "end": "2025-12-31 23:00:00+00:00"
+  },
+  "cold_threshold": 8.7,
+  "target_column": "cold_stress",
+  "random_seed": 42,
+  "representations": [
+    "A",
+    "B"
+  ],
+  "models": [
+    "gaussian_nb",
+    "logistic_regression",
+    "hoeffding_tree",
+    "online_bagging",
+    "adaptive_random_forest"
+  ],
+  "evaluation_metric_window_hours": 168,
+  "model_params": {
+    "gaussian_nb": {},
+    "logistic_regression": {
+      "learning_rate": 0.05,
+      "standardize": true
+    },
+    "hoeffding_tree": {
+      "grace_period": 200,
+      "split_criterion": "hellinger",
+      "delta": 1e-07,
+      "tau": 0.05,
+      "leaf_prediction": "nba"
+    },
+    "online_bagging": {
+      "n_models": 10
+    },
+    "adaptive_random_forest": {
+      "n_models": 10,
+      "max_features": "sqrt",
+      "lambda_value": 6,
+      "split_criterion": "hellinger",
+      "leaf_prediction": "nba",
+      "grace_period": 50,
+      "delta": 0.01,
+      "tau": 0.05
+    }
+  },
+  "protocol": {
+    "warmup": "BUILD -> OBSERVE TARGET -> LEARN -> UPDATE STATE",
+    "evaluation": "BUILD -> PREDICT -> OBSERVE TARGET -> EVALUATE -> LEARN -> UPDATE STATE"
+  },
+  "parameter_selection": "Parameters selected a priori before official evaluation; no tuning on 2018-2025 data."
+}

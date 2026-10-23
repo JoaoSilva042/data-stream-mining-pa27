@@ -21,3 +21,4 @@ venv/
 
 # Generated experiment histories
 results/histories/
+results/warmup_states/

@@ -136,12 +136,22 @@ RECENT_EVENT_WINDOW_HOURS = 24
 # Streaming evaluation
 EVALUATION_LABELS = (0, 1)
 
-# Same recent-performance window used as the
-# classroom default in the Week 4/5 labs.
+# Recent-performance window:
+# 168 hourly observations = 7 complete days.
+#
+# This provides a recent operational view of model
+# performance while covering seven full daily cycles.
 EVALUATION_WINDOW = 168
 
 
-# Model settings adapted from the Week 5 and Week 6 labs.
+
+# Model settings fixed a priori before the
+# official evaluation period.
+#
+# The configurations are chosen as reasonable
+# initial settings for an imbalanced streaming
+# classification problem. They are not tuned
+# on the 2018-2025 evaluation data.
 MODEL_PARAMS = {
     "gaussian_nb": {},
 
@@ -151,24 +161,26 @@ MODEL_PARAMS = {
     },
 
     "hoeffding_tree": {
-        "grace_period": 30,
-        "delta": 1e-3,
-        "tau": 0.10,
-        "leaf_prediction": "mc",
+        "grace_period": 200,
+        "split_criterion": "hellinger",
+        "delta": 1e-7,
+        "tau": 0.05,
+        "leaf_prediction": "nba",
     },
 
     "online_bagging": {
-        "n_models": 5,
+        "n_models": 10,
     },
 
     "adaptive_random_forest": {
-        "n_models": 5,
+        "n_models": 10,
         "max_features": "sqrt",
         "lambda_value": 6,
-        "leaf_prediction": "mc",
-        "grace_period": 30,
-        "delta": 1e-3,
-        "tau": 0.10,
+        "split_criterion": "hellinger",
+        "leaf_prediction": "nba",
+        "grace_period": 50,
+        "delta": 0.01,
+        "tau": 0.05,
     },
 }
 

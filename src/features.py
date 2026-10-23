@@ -24,9 +24,7 @@ class InstanceSlidingWindow:
             )
 
         self.size = int(size)
-
         self.data = deque()
-
         self.sum = 0.0
         self.sum_sq = 0.0
 
@@ -37,19 +35,16 @@ class InstanceSlidingWindow:
         """
 
         x = float(value)
-
         expired = None
 
         if len(self.data) == self.size:
             expired = self.data.popleft()
-
             self.sum -= expired
             self.sum_sq -= (
                 expired * expired
             )
 
         self.data.append(x)
-
         self.sum += x
         self.sum_sq += x * x
 
@@ -68,10 +63,7 @@ class InstanceSlidingWindow:
         if not self.count:
             return float("nan")
 
-        return (
-            self.sum
-            / self.count
-        )
+        return self.sum / self.count
 
     @property
     def variance(self):
@@ -232,8 +224,8 @@ class StreamFeatureBuilder:
             maxlen=2
         )
 
-        # Week 3-style sliding window
-        # containing the last 6 temperatures.
+        # Sliding window containing
+        # the last 6 temperatures.
         self.temperature_window = (
             InstanceSlidingWindow(
                 TEMPORAL_WINDOW_HOURS
@@ -425,3 +417,72 @@ class StreamFeatureBuilder:
         )
 
         self.observations_seen += 1
+
+    def state_snapshot(self):
+        """
+        Return a compact read-only snapshot of
+        the feature state at the current stream
+        position.
+
+        This is used at the warm-up/evaluation
+        boundary for auditability. Calling it
+        must not modify the stream state.
+        """
+
+        next_features = (
+            self.transform_one()
+            if self.ready
+            else None
+        )
+
+        return {
+            "city":
+                self.city_name,
+
+            "representation":
+                self.representation,
+
+            "observations_seen":
+                int(self.observations_seen),
+
+            "ready":
+                bool(self.ready),
+
+            "base_feature_count":
+                len(self.base_features),
+
+            "temperature_history":
+                list(
+                    self.temperature_history
+                ),
+
+            "temperature_window":
+                list(
+                    self.temperature_window
+                    .values
+                ),
+
+            "cold_stress_window":
+                list(
+                    self.cold_stress_window
+                    .values
+                ),
+
+            "previous_values":
+                (
+                    dict(
+                        self.previous_values
+                    )
+                    if self.previous_values
+                    is not None
+                    else None
+                ),
+
+            "next_features":
+                (
+                    dict(next_features)
+                    if next_features
+                    is not None
+                    else None
+                ),
+        }
