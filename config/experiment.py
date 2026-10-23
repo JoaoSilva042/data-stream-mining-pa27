@@ -138,7 +138,7 @@ EVALUATION_LABELS = (0, 1)
 
 # Same recent-performance window used as the
 # classroom default in the Week 4/5 labs.
-EVALUATION_WINDOW = 100
+EVALUATION_WINDOW = 168
 
 
 # Model settings adapted from the Week 5 and Week 6 labs.

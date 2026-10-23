@@ -464,10 +464,7 @@ def run_all_experiments(
             streams["evaluation"]
         )
 
-        for representation in (
-            "A",
-            "B",
-        ):
+        for representation in REPRESENTATIONS:
 
             for model_name in (
                 MODEL_NAMES
