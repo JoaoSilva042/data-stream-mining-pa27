@@ -228,9 +228,6 @@ def invalid_values_report(df):
     Detect numeric observations that violate
     basic physical or semantic constraints.
 
-    Non-numeric values are coerced to NaN here
-    and are reported separately by
-    unexpected_non_numeric_report().
     """
 
     invalid = {}

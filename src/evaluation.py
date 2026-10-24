@@ -15,7 +15,6 @@ class OnlineConfusionMatrix:
     """
     Incremental confusion matrix.
 
-    Adapted from the Week 4 lab.
     """
 
     def __init__(self, labels):
@@ -43,8 +42,6 @@ class OnlineConfusionMatrix:
         """
         Remove one prediction.
 
-        Used when an old observation leaves
-        the recent-performance window.
         """
 
         self.matrix[
@@ -156,7 +153,6 @@ class StreamingEvaluator:
     Maintain cumulative and recent
     streaming classification metrics.
 
-    Adapted from the Week 4 lab.
     """
 
     def __init__(
@@ -271,8 +267,6 @@ class StreamingEvaluator:
         Return current cumulative and recent
         predictive performance.
 
-        Positive-class Precision/Recall are NaN
-        while they are mathematically undefined.
         """
 
         return {
@@ -364,8 +358,6 @@ def summarize_model_state(model):
     Return a compact structural description of
     the model after warm-up.
 
-    This is for auditability, not for serialising
-    the complete trained model.
     """
 
     components = (
@@ -595,8 +587,6 @@ def warm_up_online(
         -> LEARN
         -> UPDATE FEATURE STATE
 
-    No predictions or evaluation metrics
-    are collected.
     """
 
     model_updates = 0
@@ -619,7 +609,7 @@ def warm_up_online(
         )
 
         # 3. LEARN
-        #
+        
         # During the first 24 hours there
         # is not enough feature history yet.
         if x is not None:
@@ -636,9 +626,7 @@ def warm_up_online(
             y,
         )
 
-    # IMPORTANT:
-    # Build the warm-up snapshot only AFTER
-    # the complete warm-up stream has run.
+   
     if return_state:
         warmup_state = (
             build_warmup_state(
@@ -680,11 +668,11 @@ def evaluate_model(
     prequential protocol:
 
         BUILD FEATURES
-        -> PREDICT
-        -> OBSERVE TARGET
-        -> EVALUATE
-        -> LEARN
-        -> UPDATE FEATURE STATE
+        PREDICT
+        OBSERVE TARGET
+        EVALUATE
+        LEARN
+        UPDATE FEATURE STATE
     """
 
     evaluator = StreamingEvaluator(
@@ -706,8 +694,7 @@ def evaluate_model(
             .transform_one()
         )
 
-        # After the warm-up the builder
-        # must already contain enough history.
+      
         if x is None:
             raise RuntimeError(
                 "Feature builder is not "

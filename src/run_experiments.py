@@ -85,7 +85,7 @@ def prepare_experiment_data():
     """
 
 
-    # 1. LOAD RAW CITY STREAMS
+    #  LOAD RAW CITY STREAMS
 
 
     city_data = {
@@ -99,7 +99,7 @@ def prepare_experiment_data():
     }
 
 
-    # 2. VERIFY COMMON TIMELINE
+    #  VERIFY COMMON TIMELINE
 
 
     if not compare_city_timelines(
@@ -112,9 +112,9 @@ def prepare_experiment_data():
         )
 
 
-    # 3. COMPUTE SHARED TARGET THRESHOLD
+    #  COMPUTE SHARED TARGET THRESHOLD
 
-    #
+    
     # The function uses pooled warm-up
     # temperatures only.
 
@@ -128,7 +128,7 @@ def prepare_experiment_data():
     )
 
 
-    # 4. CREATE TARGET FOR BOTH CITIES
+    #  CREATE TARGET FOR BOTH CITIES
 
 
     for city_name in city_data:
@@ -141,7 +141,7 @@ def prepare_experiment_data():
         )
 
 
-    # 5. CHRONOLOGICAL PERIODS
+    # CHRONOLOGICAL PERIODS
 
 
     city_streams = {}
@@ -193,15 +193,13 @@ def run_single_experiment(
     Run one controlled streaming experiment:
 
         one city
-        × one representation
-        × one model
+        one representation
+        one model
 
-    A fresh model and a fresh feature builder
-    are created for every experiment.
     """
 
 
-    # 1. CREATE FRESH MODEL
+    #  CREATE FRESH MODEL
 
 
     if model_name not in model_factories:
@@ -217,7 +215,7 @@ def run_single_experiment(
     )
 
 
-    # 2. CREATE FRESH FEATURE STATE
+    #  CREATE FRESH FEATURE STATE
 
 
     feature_builder = (
@@ -228,15 +226,8 @@ def run_single_experiment(
     )
 
 
-    # 3. WARM-UP
+    #  WARM-UP 2016–2017:
 
-    #
-    # 2016–2017:
-    #
-    # BUILD FEATURES
-    # → OBSERVE TARGET
-    # → LEARN
-    # → UPDATE FEATURE STATE
 
     (
         model,
@@ -253,22 +244,20 @@ def run_single_experiment(
     )
 
     # The feature builder is NOT reset here.
-    #
-    # Its final 2017 state must continue
-    # directly into the first event of 2018.
+
 
 
     # 4. PREQUENTIAL EVALUATION
 
-    #
+
     # 2018–2025:
-    #
+    
     # BUILD FEATURES
-    # → PREDICT
-    # → OBSERVE TARGET
-    # → EVALUATE
-    # → LEARN
-    # → UPDATE FEATURE STATE
+    #PREDICT
+    # OBSERVE TARGET
+    #EVALUATE
+    # LEARN
+    # UPDATE FEATURE STATE
 
     (
         evaluator,
@@ -286,12 +275,10 @@ def run_single_experiment(
     )
 
 
-    # 5. SANITY CHECK
+    # SANITY CHECK
 
-    #
-    # After two years of warm-up the feature
-    # builder must be ready, so every evaluation
-    # observation should have been processed.
+    
+    # After two years of warm-up the feature builder must be ready, so every evaluation observation should have been processed.
 
     if len(history) != len(
         evaluation_data
@@ -533,9 +520,6 @@ def save_experiment_manifest(
         """
         Return period metadata when timestamps
         are available.
-
-        Some unit tests use minimal synthetic
-        DataFrames without timestamp_utc.
         """
 
         result = {
@@ -662,13 +646,13 @@ def run_all_experiments(
     Run the complete mandatory experiment:
 
         2 cities
-        × 2 representations
-        × 5 models
+        2 representations
+        5 models
         = 20 experiments
     """
 
 
-    # 1. PREPARE COMMON DATA
+    # PREPARE COMMON DATA
 
 
     (
@@ -692,17 +676,15 @@ def run_all_experiments(
     )
 
 
-    # 2. MODEL FACTORIES
+    # MODEL FACTORIES
 
-    #
-    # Each factory call creates a new model.
+
 
     model_factories = (
         make_model_factories()
     )
 
-    # Validate that the configured model names
-    # exist in the factory dictionary.
+    # Validate that the configured model names exist in the factory dictionary.
 
     missing_models = (
         set(MODEL_NAMES)
@@ -718,7 +700,7 @@ def run_all_experiments(
     summaries = []
 
 
-    # 3. COMPLETE EXPERIMENT LOOP
+    # COMPLETE EXPERIMENT LOOP
 
 
     total_experiments = (
@@ -848,7 +830,7 @@ def run_all_experiments(
                 )
 
 
-    # 4. MASTER RESULTS TABLE
+    # MASTER RESULTS TABLE
 
 
     summaries_df = pd.DataFrame(

@@ -10,12 +10,7 @@ from config.experiment import (
 
 
 class InstanceSlidingWindow:
-    """
-    Fixed-size sliding window with exact
-    incremental statistics.
-
-    Adapted from the Week 3 lab.
-    """
+    
 
     def __init__(self, size):
         if size <= 0:
@@ -52,14 +47,12 @@ class InstanceSlidingWindow:
 
     @property
     def count(self):
-        """Number of active observations."""
-
+        
         return len(self.data)
 
     @property
     def mean(self):
-        """Current sliding-window mean."""
-
+       
         if not self.count:
             return float("nan")
 
@@ -178,16 +171,7 @@ class StreamFeatureBuilder:
     Build predictors incrementally from
     past observations only.
 
-    At time t:
-
-        transform_one()
-            uses observations < t
-
-        update_one(row_t, y_t)
-            incorporates observation t
-
-    Therefore, the current event can only
-    affect predictions from t+1 onwards.
+ 
     """
 
     def __init__(
@@ -251,9 +235,6 @@ class StreamFeatureBuilder:
         Whether enough historical information
         exists to build a model input.
 
-        A and B deliberately use the same
-        24-hour initialization period so their
-        comparison uses the same history.
         """
 
         if (
@@ -289,16 +270,13 @@ class StreamFeatureBuilder:
         Build X_t using only the state
         accumulated before time t.
 
-        Returns None while the initial
-        history is still being collected.
+
         """
 
         if not self.ready:
             return None
 
-        # ----------------------------------
-        # Representation A
-        # ----------------------------------
+    
 
         x = {
             f"{feature}_lag1":
@@ -313,10 +291,8 @@ class StreamFeatureBuilder:
         if self.representation == "A":
             return x
 
-        # ----------------------------------
-        # Representation B
-        # ----------------------------------
-        #
+
+        
         # Representation B contains all
         # features from A plus temporal
         # context.
@@ -366,8 +342,6 @@ class StreamFeatureBuilder:
         Incorporate the current observation
         into the feature state.
 
-        This must be called only after the
-        current event has been processed.
         """
 
         if y not in (0, 1):
@@ -424,9 +398,6 @@ class StreamFeatureBuilder:
         the feature state at the current stream
         position.
 
-        This is used at the warm-up/evaluation
-        boundary for auditability. Calling it
-        must not modify the stream state.
         """
 
         next_features = (
