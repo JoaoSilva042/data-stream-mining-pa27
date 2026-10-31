@@ -73,29 +73,15 @@ class TestFeatureDefinitions(unittest.TestCase):
         ]
         self.assertEqual(get_base_features("Porto"), expected)
 
-    def test_braganca_base_features_are_the_frozen_selected_set(
-        self
-    ):
-        expected = [
-            "temperature_2m",
-            "relative_humidity_2m",
-            "precipitation",
-            "wind_speed_10m",
-            "dew_point_2m",
-            "soil_temperature_7_to_28cm",
-            "soil_moisture_7_to_28cm",
-            "shortwave_radiation",
-            "sunshine_duration",
-            "pressure_msl",
-            "cloud_cover",
-            "snowfall",
-        ]
-
+    def test_braganca_base_features_are_the_frozen_selected_set(self):
         self.assertEqual(
-            get_base_features(
-                "Braganca"
-            ),
-            expected,
+            get_base_features("Braganca"),
+            get_base_features("Porto"),
+        )
+
+        self.assertNotIn(
+            "snowfall",
+            get_base_features("Braganca"),
         )
 
     def test_representation_b_is_exactly_a_plus_required_temporal_context(self):
@@ -371,6 +357,18 @@ class TestStreamFeatureBuilder(unittest.TestCase):
         self.assertEqual(len(builder.temperature_history), 2)
         self.assertEqual(builder.temperature_window.count, 6)
         self.assertEqual(builder.cold_stress_window.count, 24)
+
+    def test_cities_use_same_features(self):
+        self.assertEqual(
+            BASE_FEATURES["Porto"],
+            BASE_FEATURES["Braganca"],
+        )
+
+        for representation in ("A", "B"):
+            self.assertEqual(
+                get_feature_columns("Porto", representation),
+                get_feature_columns("Braganca", representation),
+            )
 
 
 if __name__ == "__main__":

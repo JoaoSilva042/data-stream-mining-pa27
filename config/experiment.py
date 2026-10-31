@@ -98,7 +98,7 @@ REPRESENTATIONS = (
 )
 # City-specific base predictors selected from warm-up EDA.
 BASE_FEATURES = {
-        "Porto": (
+    "Porto": (
         "temperature_2m",
         "relative_humidity_2m",
         "precipitation",
@@ -120,14 +120,12 @@ BASE_FEATURES = {
         "dew_point_2m",
         "soil_temperature_7_to_28cm",
         "soil_moisture_7_to_28cm",
-        "shortwave_radiation",
         "sunshine_duration",
+        "shortwave_radiation",
         "pressure_msl",
         "cloud_cover",
-        "snowfall",
     ),
 }
-
 
 # Representation B temporal windows.
 TEMPORAL_WINDOW_HOURS = 6

@@ -1,0 +1,72 @@
+{
+  "protocol": "joint",
+  "cities": [
+    "Porto",
+    "Braganca"
+  ],
+  "threshold": 8.7,
+  "feature_columns": {
+    "A": [
+      "temperature_2m_lag1",
+      "relative_humidity_2m_lag1",
+      "precipitation_lag1",
+      "wind_speed_10m_lag1",
+      "dew_point_2m_lag1",
+      "soil_temperature_7_to_28cm_lag1",
+      "soil_moisture_7_to_28cm_lag1",
+      "sunshine_duration_lag1",
+      "shortwave_radiation_lag1",
+      "pressure_msl_lag1",
+      "cloud_cover_lag1"
+    ],
+    "B": [
+      "temperature_2m_lag1",
+      "relative_humidity_2m_lag1",
+      "precipitation_lag1",
+      "wind_speed_10m_lag1",
+      "dew_point_2m_lag1",
+      "soil_temperature_7_to_28cm_lag1",
+      "soil_moisture_7_to_28cm_lag1",
+      "sunshine_duration_lag1",
+      "shortwave_radiation_lag1",
+      "pressure_msl_lag1",
+      "cloud_cover_lag1",
+      "temperature_delta_1h",
+      "temperature_mean_6h",
+      "temperature_std_6h",
+      "cold_stress_hours_24h"
+    ]
+  },
+  "selection_metric": "macro_f1",
+  "selection_tiebreakers": [
+    "recall_positive",
+    "total_ms_per_event"
+  ],
+  "selected_by_city": [
+    {
+      "city": "Braganca",
+      "model": "online_bagging",
+      "representation": "B",
+      "macro_f1": 0.9699865061991624,
+      "recall_positive": 0.9559797811257792
+    },
+    {
+      "city": "Porto",
+      "model": "online_bagging",
+      "representation": "B",
+      "macro_f1": 0.9630679807600058,
+      "recall_positive": 0.922481982773774
+    }
+  ],
+  "joint_configurations": [
+    {
+      "model": "online_bagging",
+      "representation": "B"
+    }
+  ],
+  "update_order": [
+    "Porto",
+    "Braganca"
+  ],
+  "rule": "predict both -> evaluate both -> learn both -> update both builders"
+}

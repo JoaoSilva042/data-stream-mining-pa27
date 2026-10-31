@@ -1,0 +1,3 @@
+city,representation,model,tn_individual,fp_individual,fn_individual,tp_individual,tn_joint,fp_joint,fn_joint,tp_joint,delta_fp,delta_fn
+Braganca,B,online_bagging,48914,837,897,19480,49033,718,921,19456,-119,24
+Porto,B,online_bagging,64115,324,441,5248,64111,328,410,5279,4,-31

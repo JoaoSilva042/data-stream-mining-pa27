@@ -6,7 +6,7 @@ This document describes the architecture and implementation of the PA27 Data Str
 
 ## 1. System overview
 
-The project implements a complete chronological streaming-classification pipeline:
+The project implements a complete chronological streaming-classification pipeline. It evaluates 20 independent city-specific combinations and then a selected unified protocol with a shared classifier:
 
 ```text
 Open-Meteo historical data
@@ -44,7 +44,26 @@ previous-state features          A + temporal context
         PREDICT -> EVALUATE -> LEARN
                        |
                        v
-        histories + summaries + figures
+        20 city-specific experiment results
+                       |
+                       v
+    select best (model, representation) per city
+      by Macro-F1, Recall, and event cost
+                       |
+                       v
+         deduplicate chosen combinations
+                       |
+                       v
+       1 or 2 joint model configurations
+       1 shared classifier per configuration
+       2 independent temporal feature states
+                       |
+                       v
+       PREDICT BOTH -> EVALUATE BOTH
+       -> LEARN BOTH -> UPDATE BOTH STATES
+                       |
+                       v
+       separate Porto / Bragança joint metrics
 ```
 
 The design is deliberately modular. Data acquisition, preprocessing, feature engineering, model construction, evaluation and experiment orchestration are separated into different modules so that each responsibility can be tested independently.
@@ -116,7 +135,7 @@ It defines:
 - model names and frozen hyperparameters;
 - random seed.
 
-Centralising these values prevents duplicated configuration and makes the official run reproducible.
+Centralising these values prevents duplicated configuration and makes the 20 city-specific runs reproducible. The two city entries in `BASE_FEATURES` are kept as separate tuples but are identical: 11 base variables each, in the same order. The joint run validates this equality. Joint model/representation selection is **not** frozen a priori: it is performed from the individual-run summary and recorded in a separate joint manifest.
 
 ---
 
@@ -433,7 +452,7 @@ Returns a copy of the active values for audit/debug snapshots.
 
 Returns the frozen city-specific Representation A source variables from configuration.
 
-Porto uses 11 base variables. Bragança uses the same conceptual set plus snowfall, which was retained because it is a non-constant physically relevant feature in Bragança.
+Porto and Bragança each use the **same 11 base variables**, in the same order, although `config/experiment.py` keeps two separate city entries. `snowfall` is **not** an input to either predictive feature set; it remains in the raw weather data and can still be used for descriptive analysis.
 
 ## `get_feature_columns(city_name, representation)`
 
@@ -441,7 +460,7 @@ Purpose: describe exactly which model-input names the feature builder will emit.
 
 Representation A converts every selected source variable to a `_lag1` predictor.
 
-Representation B contains all A features plus:
+Representation A has **11 predictors per city**. Representation B has **15**, consisting of all A features plus:
 
 - `temperature_delta_1h`;
 - `temperature_mean_6h`;
@@ -759,7 +778,7 @@ For the official experiment cold starts are zero, so all 70,128 evaluation obser
 
 ---
 
-# 9. `src/run_experiments.py` — experiment orchestration
+# 9. Experiment orchestration — individual and unified protocols
 
 This module connects the otherwise independent pieces into the official controlled experiment.
 
@@ -862,6 +881,83 @@ uv run python -m src.run_experiments
 
 ---
 
+## `src/run_joint_experiments.py` — unified incremental learning
+
+This is a **separate** runner from `src/run_experiments.py`. It reuses `prepare_experiment_data()`, the same River model factories, `StreamFeatureBuilder`, `StreamingEvaluator`, and evaluation-summary helpers, but does not instantiate a classifier per city.
+
+### `aligned_rows(data)`
+
+Iterates the Porto and Bragança data together, enforcing:
+
+- exactly the expected two cities;
+- equal stream lengths;
+- identical UTC timestamps for each pair of rows;
+- strictly increasing timestamps.
+
+The streams are synchronized by their common hourly chronology. No historical block from one city is processed before returning to the beginning of the other city's timeline.
+
+### `run_joint_experiment(...)`
+
+A single invocation represents **one selected model/representation pair**, not one city. It creates:
+
+- **one fresh shared classifier** from `make_model_factories()`;
+- **two independent** `StreamFeatureBuilder` objects (Porto, Bragança);
+- **two independent** `StreamingEvaluator` objects and separate timing counters.
+
+The base feature configurations are checked for identical feature names and order. A and B are implemented identically in both city streams; the model does not receive a city identifier or other-city weather features in an input vector.
+
+**Warm-up (2016–2017):** for each timestamp, construct past-only feature vectors from both cities, update the same classifier with each available labelled example, then update both feature builders. The first 24 hours initialize each builder, leaving **17,520 model updates per city** and **35,040 joint model updates** in the saved run. The learned model and both feature states continue without reset into evaluation.
+
+**Prequential evaluation (2018–2025):** for each timestamp `t`:
+
+```text
+1. BUILD X_t(Porto) and X_t(Bragança) from separate city histories
+2. PREDICT both using the same shared model state
+3. EVALUATE both predictions against their respective targets
+4. LEARN both labelled examples into the shared model
+5. UPDATE the two city-specific feature builders
+```
+
+Both predictions for a timestamp occur before either label is used to learn. The subsequent model updates run in the fixed order **Porto then Bragança**. The model itself is shared; sliding temperature windows, lag states and recent Cold Stress counts are **not** pooled or mixed between cities.
+
+The runner records per-city Accuracy, Macro-F1, positive-class Precision/Recall, confusion-matrix counts, and measured prediction/update milliseconds per event. Thus, **each joint configuration produces two summary rows**, each with **70,128 evaluated predictions**, plus two event-level histories.
+
+### `run_all_joint_experiments()`
+
+Dependencies and selection procedure:
+
+1. Run `src.run_experiments` first to produce `results/summaries/experiment_summary.csv`.
+2. Validate the presence of all **20** city/representation/model results and their frozen threshold.
+3. Rank all ten combinations **within each city** by descending Macro-F1, then descending positive-class Recall, then ascending prediction-plus-update milliseconds per event. Model name and representation provide deterministic final tie-breakers.
+4. Keep one winner per city, then **deduplicate `(model, representation)` pairs**.
+5. Execute **one or two joint configurations**, depending on whether the two city-specific winners coincide.
+6. Save a selection/execution manifest, separate summaries, histories, and warm-up snapshots under `results/joint/`.
+
+Before writing new joint histories/snapshots, the runner removes existing `.csv`/`.json` files inside the corresponding **joint** output subdirectories. It does not remove the 20 individual summaries or histories.
+
+The joint selection is made **after observing the same 2018–2025 evaluation performance** used to compare the protocols. The joint results are therefore **exploratory**; they must not be described as unbiased out-of-sample validation of the selected approach. The shared classifier also receives twice the warm-up example count of an individual city model.
+
+### Current saved joint run
+
+The committed result snapshot selects **Online Bagging / Representation B** for **both cities**. Because the winners coincide, the saved joint summary has **one model configuration and two city rows**.
+
+| City | Protocol | Accuracy | Macro-F1 | Precision (positive) | Recall (positive) | FP | FN |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Porto | Individual | 0.98909 | 0.96307 | 0.94185 | 0.92248 | 324 | 441 |
+| Porto | Joint | 0.98948 | 0.96447 | 0.94150 | 0.92793 | 328 | 410 |
+| Bragança | Individual | 0.97527 | 0.96999 | 0.95880 | 0.95598 | 837 | 897 |
+| Bragança | Joint | 0.97663 | 0.97157 | 0.96441 | 0.95480 | 718 | 921 |
+
+The table documents the existing result files, not a new experiment or a claim of statistical significance.
+
+Run the joint protocol with:
+
+```bash
+uv run python -m src.run_joint_experiments
+```
+
+---
+
 # 10. Notebook architecture
 
 ## `notebooks/01_data_quality_eda.ipynb`
@@ -891,7 +987,7 @@ Descriptive evaluation-period figures can still be used to characterise the real
 
 ## `notebooks/02_results_analysis.ipynb`
 
-Purpose: audit and analyse the outputs of the frozen 20-run experiment.
+Purpose: audit and analyse the **20 city-specific runs** and compare selected model/representation configurations against the **unified incremental learning** run.
 
 Main sections:
 
@@ -904,9 +1000,10 @@ Main sections:
 7. recent-window behaviour over time;
 8. computational evidence / cost-performance;
 9. persistence baseline;
-10. transition diagnostics.
+10. transition diagnostics;
+11. selection of the best city-specific model/representation pairs and joint-versus-individual comparison, including final predictive metrics, prediction/update costs, and rolling Recall.
 
-The notebook also exports compact result tables and figures under `outputs/results_*`.
+The notebook reads the joint summary from `results/joint/summaries/joint_experiment_summary.csv` and the chosen joint histories from `results/joint/histories/`. The saved notebook writes `joint_vs_individual.csv` and `joint_vs_individual_cost.csv`; its joint temporal Recall plots are displayed interactively. Earlier cells export individual-run tables and figures under `outputs/results_*`. Interpretation of these results and any final recommendation must be checked against the freshly generated outputs.
 
 ---
 
@@ -922,7 +1019,7 @@ Sampling frequency and prediction horizon are different concepts. This project p
 
 The target is literally defined by current temperature. If `temperature_2m_t` were included in `X_t`, the model would receive the answer. Therefore the temperature predictor is `temperature_2m_lag1` and all rolling features terminate at `t-1`.
 
-## 11.3 Why Representation A is city-specific
+## 11.3 Why a common predictive feature set is used
 
 The assignment requires core previous-state weather information but permits justified additional variables. Warm-up EDA was used to identify redundant/constant variables without consulting evaluation results.
 
@@ -936,8 +1033,9 @@ Important decisions include:
 - exclude rain when redundant with precipitation;
 - exclude surface pressure when redundant with mean sea-level pressure;
 - retain one representative deeper soil temperature/moisture measure;
-- exclude snowfall in Porto because it is constant/near-noninformative there;
-- retain snowfall in Bragança because it occurs and has operational meaning.
+- exclude `snowfall` from both predictive feature sets to standardize model comparisons;
+- retain `snowfall` in the meteorological source data and in descriptive analysis where relevant;
+- preserve separate `BASE_FEATURES` entries for Porto and Bragança, but make their eleven variable names and order identical.
 
 Low simple Pearson correlation by itself was not treated as sufficient reason to remove a feature, because nonlinear stream learners can use relationships not captured by one linear coefficient.
 
@@ -1023,11 +1121,22 @@ outputs/eda_figures/
 
 ## Experiment outputs
 
+City-specific results:
+
 ```text
 results/experiment_manifest.json
 results/summaries/experiment_summary.csv
 results/histories/*.csv
 results/warmup_states/*.json
+```
+
+Selected unified learning results:
+
+```text
+results/joint/joint_manifest.json
+results/joint/summaries/joint_experiment_summary.csv
+results/joint/histories/*.csv
+results/joint/warmup_states/*.json
 ```
 
 ## Result-analysis outputs
@@ -1037,7 +1146,7 @@ outputs/results_tables/
 outputs/results_figures/
 ```
 
-The histories and warm-up states are generated but excluded from Git due to their size. The summary, manifest, notebooks and report-ready compact outputs are sufficient to understand the submitted experiment, while histories can be regenerated with one command.
+The city-specific histories and warm-up states are generated and excluded from Git due to their size. The current `.gitignore` does **not** exclude the analogous `results/joint/histories/` or `results/joint/warmup_states/` paths; they will be tracked if added to Git unless the ignore rules are extended. Both sets of histories can be regenerated by running the two experiment scripts in order.
 
 ---
 
@@ -1096,7 +1205,11 @@ Checks that all five mandatory River factories exist, return independent fresh o
 
 ## `tests/test_run_experiments.py`
 
-Checks the orchestrator and verifies that the complete experiment contains exactly the configured 20 city/representation/model combinations.
+Checks the city-specific orchestrator and verifies that it contains exactly the configured 20 city/representation/model combinations.
+
+## `tests/test_joint_experiments.py`
+
+Uses a simulated incremental classifier to check that a single shared model is created, both city predictions precede updates at the same timestamp, each city retains an independent rolling temperature state, and misaligned or unequal-length streams are rejected. This tests the joint-control logic, not the full River ensemble implementation.
 
 Run everything with:
 
@@ -1116,12 +1229,15 @@ Warm-up rows per city:    17,544
 Evaluation rows per city: 70,128
 Warm-up model updates:    17,520
 Cold threshold:            8.7 °C
-Official runs:            20
+City-specific runs:      20
+Joint configurations:    1 (current snapshot; generally 1 or 2)
+Joint warm-up updates:   35,040 (17,520 per city)
+Joint summary rows:      2 (current snapshot)
 Cold starts in evaluation: 0
 Random seed:              42
 ```
 
-All 20 official histories must have the same 70,128 timestamps within each common 2018–2025 evaluation timeline.
+All 20 city-specific histories must have the same 70,128 timestamps within each common 2018–2025 evaluation timeline. Each selected joint configuration yields two city histories of 70,128 hourly observations each. The joint protocol aligns city timestamps before predictions.
 
 The summary confusion-matrix counts must satisfy:
 
@@ -1129,20 +1245,21 @@ The summary confusion-matrix counts must satisfy:
 TN + FP + FN + TP = 70,128
 ```
 
-for every run.
+for each reported city-specific or joint city summary row.
 
 ---
 
 # 15. Execution order for a full reproduction
 
 ```text
-1. uv sync
-2. run tests
-3. use committed data snapshot (or optionally rerun data acquisition)
-4. execute 01_data_quality_eda.ipynb
-5. run python -m src.run_experiments
-6. execute 02_results_analysis.ipynb
-7. use exported outputs in the report
+1. uv sync --python 3.12 --frozen
+2. uv run python -m unittest discover -s tests -v
+3. use the committed data snapshot (or optionally rerun acquisition)
+4. execute notebooks/01_data_quality_eda.ipynb
+5. uv run python -m src.run_experiments       # 20 individual runs
+6. uv run python -m src.run_joint_experiments # select winners and run joint model(s)
+7. execute notebooks/02_results_analysis.ipynb
+8. check regenerated tables, plots and written interpretation before reporting
 ```
 
 Commands are documented in `README.md`.

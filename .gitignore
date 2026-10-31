@@ -22,3 +22,7 @@ venv/
 # Generated experiment histories
 results/histories/
 results/warmup_states/
+
+# Generated joint experiment histories
+results/joint/histories/
+results/joint/warmup_states/
