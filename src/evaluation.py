@@ -215,23 +215,20 @@ class StreamingEvaluator:
 
         self.observations_seen += 1
 
-        # Some online models may not be able
-        # to predict before seeing any data.
+        # Some online models may not be able to predict before seeing any data.
         if y_pred is None:
             self.cold_starts += 1
             return self.snapshot()
 
         self.predictions_evaluated += 1
 
-        # Cumulative metrics use the
-        # complete evaluation history.
+        # Cumulative metrics use the  complete evaluation history.
         self.cumulative.update(
             y_true,
             y_pred,
         )
 
-        # If the recent window is full,
-        # remove its oldest prediction.
+        # If the recent window is full, remove its oldest prediction.
         if (
             len(self.recent_pairs)
             == self.window_size
@@ -580,12 +577,6 @@ def warm_up_online(
     Sequentially initialize both the model
     and the streaming feature state.
 
-    During warm-up:
-
-        BUILD X_t
-        -> OBSERVE y_t
-        -> LEARN
-        -> UPDATE FEATURE STATE
 
     """
 
@@ -594,13 +585,13 @@ def warm_up_online(
     for row in warmup.itertuples(
         index=False
     ):
-        # 1. BUILD FEATURES FROM THE PAST
+        # BUILD FEATURES FROM THE PAST
         x = (
             feature_builder
             .transform_one()
         )
 
-        # 2. OBSERVE CURRENT TARGET
+        # OBSERVE CURRENT TARGET
         y = int(
             getattr(
                 row,
@@ -608,7 +599,7 @@ def warm_up_online(
             )
         )
 
-        # 3. LEARN
+        # LEARN
         
         # During the first 24 hours there
         # is not enough feature history yet.
@@ -711,8 +702,8 @@ def evaluate_model(
             - start
         )
 
-        # 3. OBSERVE CURRENT TARGET
-        #
+        # OBSERVE CURRENT TARGET
+        
         # Only now do we reveal y_t.
         y = int(
             getattr(
@@ -741,8 +732,8 @@ def evaluate_model(
                 - start
             )
 
-        # 6. UPDATE FEATURE STATE
-        #
+        #  UPDATE FEATURE STATE
+        
         # Observation t becomes historical
         # information for t+1.
         feature_builder.update_one(
@@ -848,6 +839,7 @@ def build_evaluation_summary(
     #
     # True 0     TN     FP
     # True 1     FN     TP
+
     tn = int(
         confusion_matrix[0, 0]
     )

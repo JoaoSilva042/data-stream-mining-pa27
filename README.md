@@ -97,21 +97,70 @@ river==0.26.1
 
 For exact transitive versions, `uv.lock` is the authoritative lock file.
 
-## 1. Install uv
 
-If `uv` is already installed, skip this section.
+## 1. Install Git and uv (macOS / Windows)
 
-On macOS with Homebrew:
+Git is required to clone the repository. `uv` manages the Python version, virtual environment and project dependencies.
+
+### macOS (Terminal)
+
+First, verify that Git is available:
+
+```bash
+git --version
+```
+
+If Git is not installed, install the Apple Command Line Tools:
+
+```bash
+xcode-select --install
+```
+
+Install uv using the official installer:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Alternatively, if Homebrew is installed:
 
 ```bash
 brew install uv
 ```
 
-Check the installation:
+Open a new Terminal window if necessary, and verify:
 
 ```bash
+git --version
 uv --version
 ```
+
+### Windows 10/11 (PowerShell)
+
+Open PowerShell and install Git and uv using WinGet:
+
+```powershell
+winget install --id Git.Git -e
+winget install --id astral-sh.uv -e
+```
+
+If WinGet is unavailable, install Git from https://git-scm.com/download/win and use the official uv installer:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Close and reopen PowerShell, then verify:
+
+```powershell
+git --version
+uv --version
+```
+
+The remaining commands in this README can be executed on both macOS Terminal and Windows PowerShell.
+
+Python does not need to be installed manually because uv can install the required Python 3.12 version.
+
 
 ## 2. Create / synchronise the environment
 
@@ -207,11 +256,7 @@ notebooks/01_data_quality_eda.ipynb
 Or execute it non-interactively from the repository root:
 
 ```bash
-uv run jupyter nbconvert \
-  --to notebook \
-  --execute \
-  --inplace \
-  notebooks/01_data_quality_eda.ipynb
+uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_data_quality_eda.ipynb
 ```
 
 The notebook generates EDA tables and figures under `outputs/eda_tables/` and `outputs/eda_figures/`.
@@ -327,11 +372,7 @@ notebooks/02_results_analysis.ipynb
 Or execute it non-interactively:
 
 ```bash
-uv run jupyter nbconvert \
-  --to notebook \
-  --execute \
-  --inplace \
-  notebooks/02_results_analysis.ipynb
+uv run jupyter nbconvert --to notebook --execute --inplace notebooks/02_results_analysis.ipynb
 ```
 
 The notebook exports report-ready material to:
@@ -341,29 +382,128 @@ outputs/results_tables/
 outputs/results_figures/
 ```
 
+
 ## 8. Reproduce the complete workflow from a fresh clone
+
+The following workflow supports macOS Terminal and Windows PowerShell.
+
+Before starting, install Git and uv using the instructions in Section 1.
+
+### 8.1. Clone the repository
 
 ```bash
 git clone https://github.com/JoaoSilva042/data-stream-mining-pa27.git
 cd data-stream-mining-pa27
+```
 
+### 8.2. Set up Python and dependencies
+
+```bash
 uv python install 3.12
 uv sync --python 3.12 --frozen
+```
 
+This creates the project's virtual environment and installs the dependencies recorded in `uv.lock`.
+
+Manual virtual environment activation is not required.
+
+### 8.3. Dataset availability
+
+The repository already includes the raw and processed Open-Meteo weather datasets.
+
+The processed streams are located at:
+
+- `data/processed/porto_hourly.csv`
+- `data/processed/braganca_hourly.csv`
+
+Each file contains 87,672 hourly observations covering 2016–2025.
+
+**For exact reproduction of the submitted results, use these committed datasets. No additional download is required.**
+
+#### Optional: download the data again
+
+To test the complete data acquisition pipeline, including the Open-Meteo API:
+
+```bash
+uv run python -m src.data
+```
+
+This regenerates the raw JSON files, provenance records and processed CSV streams.
+
+Run this command before the tests, EDA and experiments if you choose to rebuild the datasets.
+
+Re-downloading is optional and may produce a different historical snapshot if Open-Meteo updates its records. Use a separate test copy when you want to preserve the original data.
+
+### 8.4. Run all tests
+
+```bash
 uv run python -m unittest discover -s tests -v
+```
 
-# Optional: re-run EDA using the committed data snapshot
+All tests should complete without failures or errors before proceeding.
+
+### 8.5. Execute exploratory data analysis
+
+```bash
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/01_data_quality_eda.ipynb
+```
 
-# Reproduce 20 independent city-specific experiments
+This regenerates the data quality reports, descriptive statistics, tables and figures.
+
+### 8.6. Run the 20 city-specific experiments
+
+```bash
 uv run python -m src.run_experiments
+```
 
-# Select the city-specific winners and run the unified protocol
+This executes five online classifiers, two feature representations and two cities.
+
+The results are saved under `results/`.
+
+### 8.7. Run the selected unified experiments
+
+```bash
 uv run python -m src.run_joint_experiments
+```
 
-# Recreate result tables/figures
+This command must run after the city-specific experiments.
+
+The script selects the best model–representation combination for each city using the individual experiment results.
+
+Duplicate winning configurations are removed before executing the unified learning protocol.
+
+The results are saved under `results/joint/`.
+
+### 8.8. Generate final result tables and figures
+
+```bash
 uv run jupyter nbconvert --to notebook --execute --inplace notebooks/02_results_analysis.ipynb
 ```
+
+This regenerates the predictive, computational, temporal and unified-learning comparisons.
+
+Outputs are saved to:
+
+- `outputs/results_tables/`
+- `outputs/results_figures/`
+
+### 8.9. Expected results
+
+For the committed datasets:
+
+- 20 city-specific experiments.
+- 70,128 evaluated observations per city and model.
+- Online Bagging, Representation B selected for both cities.
+- One unified model, with separate results for both cities.
+- `experiment_summary.csv`: 20 rows.
+- `joint_experiment_summary.csv`: 2 rows.
+
+Prediction and update times may vary depending on the computer.
+
+If different data snapshots are used, the selected models and their predictive results may also differ.
+
+The complete pipeline has been reproduced successfully on macOS. Windows commands have been prepared for compatibility with PowerShell but have not yet been independently validated on a Windows machine.
+
 
 ## Experimental design summary
 

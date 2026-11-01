@@ -247,7 +247,7 @@ def run_single_experiment(
 
 
 
-    # 4. PREQUENTIAL EVALUATION
+    # PREQUENTIAL EVALUATION
 
 
     # 2018–2025:
@@ -290,7 +290,7 @@ def run_single_experiment(
         )
 
 
-    # 6. FINAL SUMMARY
+    # FINAL SUMMARY
 
 
     summary = (

@@ -202,14 +202,12 @@ class StreamFeatureBuilder:
         # Complete weather state from t-1.
         self.previous_values = None
 
-        # Last two temperatures:
-        # needed for T(t-1) - T(t-2).
+        # Last two temperatures: needed for T(t-1) - T(t-2).
         self.temperature_history = deque(
             maxlen=2
         )
 
-        # Sliding window containing
-        # the last 6 temperatures.
+        # Sliding window containing the last 6 temperatures.
         self.temperature_window = (
             InstanceSlidingWindow(
                 TEMPORAL_WINDOW_HOURS
@@ -217,10 +215,7 @@ class StreamFeatureBuilder:
         )
 
         # Last 24 known Cold Stress labels.
-        #
-        # Since the target is binary,
-        # window.sum is exactly the number
-        # of Cold Stress hours.
+
         self.cold_stress_window = (
             InstanceSlidingWindow(
                 RECENT_EVENT_WINDOW_HOURS
@@ -293,9 +288,7 @@ class StreamFeatureBuilder:
 
 
         
-        # Representation B contains all
-        # features from A plus temporal
-        # context.
+        # Representation B contains all features from A plus temporal context.
 
         x[
             "temperature_delta_1h"
@@ -368,8 +361,7 @@ class StreamFeatureBuilder:
             ]
         )
 
-        # Current temperature becomes
-        # historical information.
+        # Current temperature becomes historical information.
         self.temperature_history.append(
             current_temperature
         )
@@ -378,14 +370,12 @@ class StreamFeatureBuilder:
             current_temperature
         )
 
-        # Current target becomes available
-        # for future event-frequency features.
+        # Current target becomes available for future event-frequency features.
         self.cold_stress_window.append(
             y
         )
 
-        # Current weather state becomes t-1
-        # when the next observation arrives.
+        # Current weather state becomes t-1 when the next observation arrives.
         self.previous_values = (
             current_values
         )

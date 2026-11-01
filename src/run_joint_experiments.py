@@ -70,10 +70,10 @@ def run_joint_experiment(
     ):
         raise ValueError("Representacoes com colunas diferentes")
 
-    # UMA instancia do classificador para as duas cidades.
+
     model = model_factories[model_name]()
 
-    # Dois estados temporais independentes.
+
     builders = {
         c: StreamFeatureBuilder(c, representation)
         for c in CITIES
@@ -115,7 +115,7 @@ def run_joint_experiment(
         },
     }
 
-    # Avaliadores separados: um para cada cidade.
+  
     evaluators = {
         c: StreamingEvaluator(
             labels=EVALUATION_LABELS,
@@ -141,7 +141,7 @@ def run_joint_experiment(
                 "Features indisponiveis durante a avaliacao"
             )
 
-        # 1. PREDICT BOTH
+        # PREDICT BOTH
         predictions = {}
 
         for c in CITIES:
@@ -149,7 +149,7 @@ def run_joint_experiment(
             predictions[c] = model.predict_one(x[c])
             prediction_times[c] += perf_counter() - start
 
-        # 2. EVALUATE BOTH
+        # EVALUATE BOTH
         y = {
             c: int(getattr(rows[c], TARGET_COLUMN))
             for c in CITIES
@@ -160,14 +160,14 @@ def run_joint_experiment(
             for c in CITIES
         }
 
-        # 3. LEARN BOTH
+        # LEARN BOTH
         # O MESMO classificador aprende com as duas cidades.
         for c in CITIES:
             start = perf_counter()
             model.learn_one(x[c], y[c])
             update_times[c] += perf_counter() - start
 
-        # 4. UPDATE CITY-SPECIFIC WINDOWS
+        # UPDATE CITY-SPECIFIC WINDOWS
         for c in CITIES:
             builders[c].update_one(rows[c], y[c])
 
@@ -194,7 +194,7 @@ def run_joint_experiment(
                 **snapshots[c],
             })
 
-    # RESULTADOS FINAIS
+    
     summaries = {}
 
     for c in CITIES:
@@ -241,8 +241,7 @@ def run_all_joint_experiments():
     factories = make_model_factories()
 
 
-    # Selecionar os vencedores a partir das
-    # experiencias individuais ja executadas.
+
     summary_path = (
         PROJECT_ROOT
         / "results"
@@ -297,13 +296,13 @@ def run_all_joint_experiments():
             "O threshold dos resultados individuais e diferente."
         )
 
-    # Custo de previsao + atualizacao por observacao.
+
     individual["total_ms_per_event"] = (
         individual["prediction_ms_per_event"]
         + individual["update_ms_per_event"]
     )
 
-    # Escolha independente do vencedor de cada cidade.
+
     best_per_city = (
         individual
         .sort_values(
@@ -323,8 +322,6 @@ def run_all_joint_experiments():
         .reset_index(drop=True)
     )
 
-    # Retirar configuracoes repetidas.
-    # Ex.: se ambas escolherem Bagging B, executar apenas uma.
     selected_configs = list(
         best_per_city[
             ["model", "representation"]
@@ -410,7 +407,7 @@ def run_all_joint_experiments():
 
     results = []
 
-    # Executar apenas as configuracoes selecionadas.
+
     selected_set = set(selected_configs)
 
     for rep in REPRESENTATIONS:
